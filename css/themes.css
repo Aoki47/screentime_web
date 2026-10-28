@@ -1,0 +1,302 @@
+/* 自動生成: node tools/gen-theme-css.mjs （js/themes.js が正。直接編集しない） */
+
+/* 1 Lumière */
+:root[data-theme="lumiere"] {
+  --bg: #FFFFFF;
+  --bg-c: #FFFFFF;
+  --card: #F6F4EE;
+  --card-border: #ECE8DF;
+  --text: #1A1A18;
+  --text2: #888780;
+  --muted: #888780;
+  --track: #E4E0D5;
+  --sel: #00000014;
+  --hour: #0000000D;
+  --grid: #0000001A;
+  --limit: #0000008C;
+  --yt: #D6284A;
+  --yt-l: #DF5772;
+  --rb: #12A06F;
+  --rb-l: #46B58F;
+  --warn: #B26A00;
+  --over: #C62828;
+  --none: #8A8A85;
+  --badge-yt: #D6284A;
+  --badge-rb: #12A06F;
+  --badge-text: #FFFFFF;
+  --accent: #1D9E75;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: light;
+}
+
+/* 2 Noir */
+:root,
+:root[data-theme="noir"] {
+  --bg: #0F1216;
+  --bg-c: #0F1216;
+  --card: #171C23;
+  --card-border: #242A33;
+  --text: #E8EAF0;
+  --text2: #8A90A0;
+  --muted: #8A90A0;
+  --track: #2A323D;
+  --sel: #FFFFFF24;
+  --hour: #FFFFFF17;
+  --grid: #FFFFFF1A;
+  --limit: #FFFFFFBF;
+  --yt: #F4708A;
+  --yt-l: #F68FA4;
+  --rb: #3DD6A0;
+  --rb-l: #68DFB5;
+  --warn: #FBBF24;
+  --over: #F04438;
+  --none: #8A96A6;
+  --badge-yt: #E11D48;
+  --badge-rb: #059669;
+  --badge-text: #FFFFFF;
+  --accent: #1D9E75;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: dark;
+}
+
+/* 3 Glass Light */
+:root[data-theme="glass_light"] {
+  --bg: linear-gradient(135deg, #D7E8FF, #E7E0FF, #D6F3EC);
+  --bg-c: #E7E0FF;
+  --card: #FFFFFF80;
+  --card-border: #FFFFFFB3;
+  --text: #23203A;
+  --text2: #5B5873;
+  --muted: #6E6B82;
+  --track: #23203A24;
+  --sel: #23203A1A;
+  --hour: #23203A0F;
+  --grid: #23203A1F;
+  --limit: #23203A99;
+  --yt: #C81E4B;
+  --yt-l: #D45073;
+  --rb: #0E8F63;
+  --rb-l: #43A885;
+  --warn: #8F5300;
+  --over: #B3261E;
+  --none: #6E6B82;
+  --badge-yt: #C81E4B;
+  --badge-rb: #0E8F63;
+  --badge-text: #FFFFFF;
+  --accent: #0B5A44;
+  --on-accent: #FFFFFF;
+  --scrim: #00000073;
+  color-scheme: light;
+}
+
+/* 4 Glass Dark */
+:root[data-theme="glass_dark"] {
+  --bg: linear-gradient(135deg, #1B2340, #2A2550, #123A44);
+  --bg-c: #2A2550;
+  --card: #FFFFFF14;
+  --card-border: #FFFFFF2E;
+  --text: #EAF0FF;
+  --text2: #AAB4D4;
+  --muted: #AAB4D4;
+  --track: #FFFFFF29;
+  --sel: #FFFFFF24;
+  --hour: #FFFFFF17;
+  --grid: #FFFFFF1A;
+  --limit: #FFFFFFBF;
+  --yt: #FF7F96;
+  --yt-l: #FF9BAD;
+  --rb: #5FE3B5;
+  --rb-l: #82E9C5;
+  --warn: #FFC247;
+  --over: #FF6E5E;
+  --none: #AAB4D4;
+  --badge-yt: #E11D48;
+  --badge-rb: #059669;
+  --badge-text: #FFFFFF;
+  --accent: #5DCAA5;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: dark;
+}
+
+/* 5 Midnight */
+:root[data-theme="midnight"] {
+  --bg: #0B1836;
+  --bg-c: #0B1836;
+  --card: #12234A;
+  --card-border: #1E2F55;
+  --text: #DCE6FF;
+  --text2: #7E8DB8;
+  --muted: #7E8DB8;
+  --track: #22345F;
+  --sel: #FFFFFF24;
+  --hour: #FFFFFF17;
+  --grid: #FFFFFF1A;
+  --limit: #FFFFFFBF;
+  --yt: #FF7A90;
+  --yt-l: #FF97A8;
+  --rb: #2ED8B0;
+  --rb-l: #5CE1C1;
+  --warn: #FFC247;
+  --over: #FF5A4A;
+  --none: #7E8DB8;
+  --badge-yt: #E11D48;
+  --badge-rb: #059669;
+  --badge-text: #FFFFFF;
+  --accent: #35D0D0;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: dark;
+}
+
+/* 6 Sakura */
+:root[data-theme="sakura"] {
+  --bg: #FFF5F8;
+  --bg-c: #FFF5F8;
+  --card: #FFFFFF;
+  --card-border: #F4DCE5;
+  --text: #4B1528;
+  --text2: #A06B7C;
+  --muted: #A06B7C;
+  --track: #F1D9E2;
+  --sel: #D4537E1F;
+  --hour: #D4537E12;
+  --grid: #4B15281A;
+  --limit: #4B15288C;
+  --yt: #C42B63;
+  --yt-l: #D15A85;
+  --rb: #3F9660;
+  --rb-l: #69AD83;
+  --warn: #B36200;
+  --over: #C62828;
+  --none: #A06B7C;
+  --badge-yt: #C42B63;
+  --badge-rb: #3F9660;
+  --badge-text: #FFFFFF;
+  --accent: #D4537E;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: light;
+}
+
+/* 7 Paper */
+:root[data-theme="paper"] {
+  --bg: #F3ECDD;
+  --bg-c: #F3ECDD;
+  --card: #FBF7EC;
+  --card-border: #E2D6BE;
+  --text: #3A2F1E;
+  --text2: #8A7A5A;
+  --muted: #8A7A5A;
+  --track: #E2D6BE;
+  --sel: #6B54331F;
+  --hour: #6B543312;
+  --grid: #3A2F1E1A;
+  --limit: #3A2F1E8C;
+  --yt: #B5473A;
+  --yt-l: #C56F65;
+  --rb: #678A4B;
+  --rb-l: #88A473;
+  --warn: #9C6500;
+  --over: #C0301E;
+  --none: #8A7A5A;
+  --badge-yt: #B5473A;
+  --badge-rb: #678A4B;
+  --badge-text: #FFFFFF;
+  --accent: #6B5433;
+  --on-accent: #FFFFFF;
+  --scrim: #00000073;
+  color-scheme: light;
+}
+
+/* 8 Forest */
+:root[data-theme="forest"] {
+  --bg: #0E1A12;
+  --bg-c: #0E1A12;
+  --card: #15271B;
+  --card-border: #1E3325;
+  --text: #DDEEE0;
+  --text2: #7FA489;
+  --muted: #7FA489;
+  --track: #223A29;
+  --sel: #FFFFFF24;
+  --hour: #FFFFFF17;
+  --grid: #FFFFFF1A;
+  --limit: #FFFFFFBF;
+  --yt: #F5775F;
+  --yt-l: #F79582;
+  --rb: #8CD46C;
+  --rb-l: #A5DD8C;
+  --warn: #FFC247;
+  --over: #FF5C4A;
+  --none: #7FA489;
+  --badge-yt: #DC4A36;
+  --badge-rb: #3F9A3F;
+  --badge-text: #FFFFFF;
+  --accent: #97C459;
+  --on-accent: #111111;
+  --scrim: #00000073;
+  color-scheme: dark;
+}
+
+/* 9 Mono */
+:root[data-theme="mono"] {
+  --bg: #FFFFFF;
+  --bg-c: #FFFFFF;
+  --card: #F1F1EE;
+  --card-border: #D9D9D4;
+  --text: #1A1A1A;
+  --text2: #8A8A85;
+  --muted: #8A8A85;
+  --track: #DADAD5;
+  --sel: #00000014;
+  --hour: #0000000D;
+  --grid: #0000001A;
+  --limit: #0000008C;
+  --yt: #B3303F;
+  --yt-l: #C45E69;
+  --rb: #4E8E5C;
+  --rb-l: #75A780;
+  --warn: #9C6500;
+  --over: #B71C1C;
+  --none: #8A8A85;
+  --badge-yt: #B3303F;
+  --badge-rb: #4E8E5C;
+  --badge-text: #FFFFFF;
+  --accent: #1A1A1A;
+  --on-accent: #FFFFFF;
+  --scrim: #00000073;
+  color-scheme: light;
+}
+
+/* 10 Sunset */
+:root[data-theme="sunset"] {
+  --bg: linear-gradient(135deg, #FFE9D6, #FBD9D0, #F6CBB0);
+  --bg-c: #FBD9D0;
+  --card: #FFFFFF99;
+  --card-border: #F3C9A8;
+  --text: #4A1B0C;
+  --text2: #9A5A3A;
+  --muted: #9A5A3A;
+  --track: #4A1B0C24;
+  --sel: #993C1D24;
+  --hour: #993C1D14;
+  --grid: #4A1B0C1F;
+  --limit: #4A1B0C99;
+  --yt: #C23A2A;
+  --yt-l: #CF6559;
+  --rb: #1B9A78;
+  --rb-l: #4DB096;
+  --warn: #8F5300;
+  --over: #B3261E;
+  --none: #9A5A3A;
+  --badge-yt: #C23A2A;
+  --badge-rb: #1B9A78;
+  --badge-text: #FFFFFF;
+  --accent: #993C1D;
+  --on-accent: #FFFFFF;
+  --scrim: #00000073;
+  color-scheme: light;
+}

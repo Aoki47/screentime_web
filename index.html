@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>使用時間</title>
+<meta name="description" content="Macの YouTube / Roblox 使用時間を表示するサイネージ">
+<meta name="theme-color" content="#0F1216">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="使用時間">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/themes.css">
+<link rel="stylesheet" href="css/style.css">
+<script>
+// 初回描画前にテーマを適用してフラッシュを防ぐ（色の定義は css/themes.css が正。IDが不明なら既定の Noir）
+(function () {
+  try {
+    var id = localStorage.getItem('theme_id');
+    if (!id) return;
+    var root = document.documentElement;
+    root.setAttribute('data-theme', id);
+    var c = getComputedStyle(root).getPropertyValue('--bg-c').trim();
+    if (c) document.querySelector('meta[name="theme-color"]').setAttribute('content', c);
+  } catch (e) { /* ストレージ不可なら既定テーマのまま */ }
+})();
+</script>
+</head>
+<body>
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="gYt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--yt-l)"/>
+      <stop offset="1" style="stop-color: var(--yt)"/>
+    </linearGradient>
+    <linearGradient id="gRb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--rb-l)"/>
+      <stop offset="1" style="stop-color: var(--rb)"/>
+    </linearGradient>
+  </defs>
+</svg>
+<div id="app"></div>
+<div id="overlay" hidden></div>
+<noscript><p style="padding:16px">JavaScript を有効にしてください。</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
