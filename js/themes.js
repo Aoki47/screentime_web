@@ -107,16 +107,26 @@ const LIGHT_HOUR = rgba(0x000000, 0.05);
 const LIGHT_GRID = rgba(0x000000, 0.10);
 const LIGHT_LIMIT = rgba(0x000000, 0.55);
 
+/** 全テーマ共通の色ロール（Android の SignageTheme の既定値つき引数と同じ）。 */
+const COMMON = {
+  onOverDeep: WHITE, // overDeep の上に載せる文字・アイコン（白系）
+  faceBody: rgb(0xffcb3d), // 顔アイコンの顔（黄色）
+  faceInk: rgb(0x4a3410), // 顔アイコンの目・口
+  faceSweat: rgb(0x4fa8f0), // 「やっちまった」顔の汗（青）
+  overStripe: '#00000040', // 合計の棒の上限超過部分に重ねる斜線（半透明の黒）
+};
+
 const lumiere = {
   id: 'lumiere', name: 'Lumière', isDark: false, isGlass: false,
   bgColors: [rgb(0xffffff)],
   cardBg: rgb(0xf6f4ee), cardBorder: rgb(0xece8df),
   textPrimary: rgb(0x1a1a18), textSecondary: rgb(0x888780), textMuted: rgb(0x888780),
   track: rgb(0xe4e0d5), selectedBg: LIGHT_SELECTED, currentHourBg: LIGHT_HOUR, grid: LIGHT_GRID, limitLine: LIGHT_LIMIT,
-  youtube: rgb(0xd6284a), youtubeLight: rgb(0xdf5772), roblox: rgb(0x12a06f), robloxLight: rgb(0x46b58f),
-  warn: rgb(0xb26a00), over: rgb(0xc62828), none: rgb(0x8a8a85),
+  youtube: rgb(0xd93958), youtubeLight: rgb(0xe47087), roblox: rgb(0x12a06f), robloxLight: rgb(0x46b58f),
+  power: rgb(0x2f6feb), powerLight: rgb(0x5e8ef0),
+  warn: rgb(0xb26a00), over: rgb(0xc62828), overDeep: rgb(0xa00e1f), none: rgb(0x8a8a85),
   badgeYoutube: rgb(0xd6284a), badgeRoblox: rgb(0x12a06f), badgeText: WHITE,
-  accent: rgb(0x1d9e75), scrim: SCRIM,
+  accent: rgb(0x1d9e75), scrim: SCRIM, ...COMMON,
 };
 
 const noir = {
@@ -126,9 +136,10 @@ const noir = {
   textPrimary: rgb(0xe8eaf0), textSecondary: rgb(0x8a90a0), textMuted: rgb(0x8a90a0),
   track: rgb(0x2a323d), selectedBg: DARK_SELECTED, currentHourBg: DARK_HOUR, grid: DARK_GRID, limitLine: DARK_LIMIT,
   youtube: rgb(0xf4708a), youtubeLight: rgb(0xf68fa4), roblox: rgb(0x3dd6a0), robloxLight: rgb(0x68dfb5),
-  warn: rgb(0xfbbf24), over: rgb(0xf04438), none: rgb(0x8a96a6),
+  power: rgb(0x5aa2ff), powerLight: rgb(0x82b9ff),
+  warn: rgb(0xfbbf24), over: rgb(0xf04438), overDeep: rgb(0xd0192d), none: rgb(0x8a96a6),
   badgeYoutube: rgb(0xe11d48), badgeRoblox: rgb(0x059669), badgeText: WHITE,
-  accent: rgb(0x1d9e75), scrim: SCRIM,
+  accent: rgb(0x1d9e75), scrim: SCRIM, ...COMMON,
 };
 
 const glassLight = {
@@ -138,10 +149,11 @@ const glassLight = {
   textPrimary: rgb(0x23203a), textSecondary: rgb(0x5b5873), textMuted: rgb(0x6e6b82),
   track: rgba(0x23203a, 0.14), selectedBg: rgba(0x23203a, 0.10), currentHourBg: rgba(0x23203a, 0.06),
   grid: rgba(0x23203a, 0.12), limitLine: rgba(0x23203a, 0.60),
-  youtube: rgb(0xc81e4b), youtubeLight: rgb(0xd45073), roblox: rgb(0x0e8f63), robloxLight: rgb(0x43a885),
-  warn: rgb(0x8f5300), over: rgb(0xb3261e), none: rgb(0x6e6b82),
+  youtube: rgb(0xc9224f), youtubeLight: rgb(0xd86080), roblox: rgb(0x0e8f63), robloxLight: rgb(0x43a885),
+  power: rgb(0x2563eb), powerLight: rgb(0x5b8bef),
+  warn: rgb(0x8f5300), over: rgb(0xb3261e), overDeep: rgb(0x940b1e), none: rgb(0x6e6b82),
   badgeYoutube: rgb(0xc81e4b), badgeRoblox: rgb(0x0e8f63), badgeText: WHITE,
-  accent: rgb(0x0b5a44), scrim: SCRIM,
+  accent: rgb(0x0b5a44), scrim: SCRIM, ...COMMON,
 };
 
 const glassDark = {
@@ -151,9 +163,10 @@ const glassDark = {
   textPrimary: rgb(0xeaf0ff), textSecondary: rgb(0xaab4d4), textMuted: rgb(0xaab4d4),
   track: rgba(0xffffff, 0.16), selectedBg: DARK_SELECTED, currentHourBg: DARK_HOUR, grid: DARK_GRID, limitLine: DARK_LIMIT,
   youtube: rgb(0xff7f96), youtubeLight: rgb(0xff9bad), roblox: rgb(0x5fe3b5), robloxLight: rgb(0x82e9c5),
-  warn: rgb(0xffc247), over: rgb(0xff6e5e), none: rgb(0xaab4d4),
+  power: rgb(0x6cb6ff), powerLight: rgb(0x92caff),
+  warn: rgb(0xffc247), over: rgb(0xff6e5e), overDeep: rgb(0xd91e34), none: rgb(0xaab4d4),
   badgeYoutube: rgb(0xe11d48), badgeRoblox: rgb(0x059669), badgeText: WHITE,
-  accent: rgb(0x5dcaa5), scrim: SCRIM,
+  accent: rgb(0x5dcaa5), scrim: SCRIM, ...COMMON,
 };
 
 const midnight = {
@@ -163,9 +176,10 @@ const midnight = {
   textPrimary: rgb(0xdce6ff), textSecondary: rgb(0x7e8db8), textMuted: rgb(0x7e8db8),
   track: rgb(0x22345f), selectedBg: DARK_SELECTED, currentHourBg: DARK_HOUR, grid: DARK_GRID, limitLine: DARK_LIMIT,
   youtube: rgb(0xff7a90), youtubeLight: rgb(0xff97a8), roblox: rgb(0x2ed8b0), robloxLight: rgb(0x5ce1c1),
-  warn: rgb(0xffc247), over: rgb(0xff5a4a), none: rgb(0x7e8db8),
+  power: rgb(0x58b4ff), powerLight: rgb(0x7fc6ff),
+  warn: rgb(0xffc247), over: rgb(0xff5a4a), overDeep: rgb(0xd0182e), none: rgb(0x7e8db8),
   badgeYoutube: rgb(0xe11d48), badgeRoblox: rgb(0x059669), badgeText: WHITE,
-  accent: rgb(0x35d0d0), scrim: SCRIM,
+  accent: rgb(0x35d0d0), scrim: SCRIM, ...COMMON,
 };
 
 const sakura = {
@@ -175,10 +189,11 @@ const sakura = {
   textPrimary: rgb(0x4b1528), textSecondary: rgb(0xa06b7c), textMuted: rgb(0xa06b7c),
   track: rgb(0xf1d9e2), selectedBg: rgba(0xd4537e, 0.12), currentHourBg: rgba(0xd4537e, 0.07),
   grid: rgba(0x4b1528, 0.10), limitLine: rgba(0x4b1528, 0.55),
-  youtube: rgb(0xc42b63), youtubeLight: rgb(0xd15a85), roblox: rgb(0x3f9660), robloxLight: rgb(0x69ad83),
-  warn: rgb(0xb36200), over: rgb(0xc62828), none: rgb(0xa06b7c),
+  youtube: rgb(0xc8386c), youtubeLight: rgb(0xd77095), roblox: rgb(0x3f9660), robloxLight: rgb(0x69ad83),
+  power: rgb(0x2f6be0), powerLight: rgb(0x5c8ceb),
+  warn: rgb(0xb36200), over: rgb(0xc62828), overDeep: rgb(0xa00e25), none: rgb(0xa06b7c),
   badgeYoutube: rgb(0xc42b63), badgeRoblox: rgb(0x3f9660), badgeText: WHITE,
-  accent: rgb(0xd4537e), scrim: SCRIM,
+  accent: rgb(0xd4537e), scrim: SCRIM, ...COMMON,
 };
 
 const paper = {
@@ -188,10 +203,11 @@ const paper = {
   textPrimary: rgb(0x3a2f1e), textSecondary: rgb(0x8a7a5a), textMuted: rgb(0x8a7a5a),
   track: rgb(0xe2d6be), selectedBg: rgba(0x6b5433, 0.12), currentHourBg: rgba(0x6b5433, 0.07),
   grid: rgba(0x3a2f1e, 0.10), limitLine: rgba(0x3a2f1e, 0.55),
-  youtube: rgb(0xb5473a), youtubeLight: rgb(0xc56f65), roblox: rgb(0x678a4b), robloxLight: rgb(0x88a473),
-  warn: rgb(0x9c6500), over: rgb(0xc0301e), none: rgb(0x8a7a5a),
+  youtube: rgb(0xb5473a), youtubeLight: rgb(0xca7b71), roblox: rgb(0x678a4b), robloxLight: rgb(0x88a473),
+  power: rgb(0x2f66c4), powerLight: rgb(0x5887d3),
+  warn: rgb(0x9c6500), over: rgb(0xc0301e), overDeep: rgb(0x9c130d), none: rgb(0x8a7a5a),
   badgeYoutube: rgb(0xb5473a), badgeRoblox: rgb(0x678a4b), badgeText: WHITE,
-  accent: rgb(0x6b5433), scrim: SCRIM,
+  accent: rgb(0x6b5433), scrim: SCRIM, ...COMMON,
 };
 
 const forest = {
@@ -201,9 +217,10 @@ const forest = {
   textPrimary: rgb(0xddeee0), textSecondary: rgb(0x7fa489), textMuted: rgb(0x7fa489),
   track: rgb(0x223a29), selectedBg: DARK_SELECTED, currentHourBg: DARK_HOUR, grid: DARK_GRID, limitLine: DARK_LIMIT,
   youtube: rgb(0xf5775f), youtubeLight: rgb(0xf79582), roblox: rgb(0x8cd46c), robloxLight: rgb(0xa5dd8c),
-  warn: rgb(0xffc247), over: rgb(0xff5c4a), none: rgb(0x7fa489),
+  power: rgb(0x4fb0ff), powerLight: rgb(0x79c4ff),
+  warn: rgb(0xffc247), over: rgb(0xff5c4a), overDeep: rgb(0xd41c26), none: rgb(0x7fa489),
   badgeYoutube: rgb(0xdc4a36), badgeRoblox: rgb(0x3f9a3f), badgeText: WHITE,
-  accent: rgb(0x97c459), scrim: SCRIM,
+  accent: rgb(0x97c459), scrim: SCRIM, ...COMMON,
 };
 
 const mono = {
@@ -213,10 +230,11 @@ const mono = {
   textPrimary: rgb(0x1a1a1a), textSecondary: rgb(0x8a8a85), textMuted: rgb(0x8a8a85),
   track: rgb(0xdadad5), selectedBg: LIGHT_SELECTED, currentHourBg: LIGHT_HOUR, grid: LIGHT_GRID, limitLine: LIGHT_LIMIT,
   // 無彩色テーマでも YouTube=赤 / Roblox=緑 は判別できるよう、彩度を抑えた色にする
-  youtube: rgb(0xb3303f), youtubeLight: rgb(0xc45e69), roblox: rgb(0x4e8e5c), robloxLight: rgb(0x75a780),
-  warn: rgb(0x9c6500), over: rgb(0xb71c1c), none: rgb(0x8a8a85),
+  youtube: rgb(0xb9414e), youtubeLight: rgb(0xcd7680), roblox: rgb(0x4e8e5c), robloxLight: rgb(0x75a780),
+  power: rgb(0x3b67b8), powerLight: rgb(0x6b8fcb),
+  warn: rgb(0x9c6500), over: rgb(0xb71c1c), overDeep: rgb(0x990f1d), none: rgb(0x8a8a85),
   badgeYoutube: rgb(0xb3303f), badgeRoblox: rgb(0x4e8e5c), badgeText: WHITE,
-  accent: rgb(0x1a1a1a), scrim: SCRIM,
+  accent: rgb(0x1a1a1a), scrim: SCRIM, ...COMMON,
 };
 
 const sunset = {
@@ -227,10 +245,11 @@ const sunset = {
   textPrimary: rgb(0x4a1b0c), textSecondary: rgb(0x9a5a3a), textMuted: rgb(0x9a5a3a),
   track: rgba(0x4a1b0c, 0.14), selectedBg: rgba(0x993c1d, 0.14), currentHourBg: rgba(0x993c1d, 0.08),
   grid: rgba(0x4a1b0c, 0.12), limitLine: rgba(0x4a1b0c, 0.60),
-  youtube: rgb(0xc23a2a), youtubeLight: rgb(0xcf6559), roblox: rgb(0x1b9a78), robloxLight: rgb(0x4db096),
-  warn: rgb(0x8f5300), over: rgb(0xb3261e), none: rgb(0x9a5a3a),
+  youtube: rgb(0xc64839), youtubeLight: rgb(0xd67b70), roblox: rgb(0x1b9a78), robloxLight: rgb(0x4db096),
+  power: rgb(0x2b5fd0), powerLight: rgb(0x5c86dd),
+  warn: rgb(0x8f5300), over: rgb(0xb3261e), overDeep: rgb(0x9a100b), none: rgb(0x9a5a3a),
   badgeYoutube: rgb(0xc23a2a), badgeRoblox: rgb(0x1b9a78), badgeText: WHITE,
-  accent: rgb(0x993c1d), scrim: SCRIM,
+  accent: rgb(0x993c1d), scrim: SCRIM, ...COMMON,
 };
 
 /** 表示順(1 Lumière 〜 10 Sunset) */
@@ -315,8 +334,12 @@ export function themeCssVars(t) {
     '--yt-l': t.youtubeLight,
     '--rb': t.roblox,
     '--rb-l': t.robloxLight,
+    '--pw': t.power,
+    '--pw-l': t.powerLight,
     '--warn': t.warn,
     '--over': t.over,
+    '--over-deep': t.overDeep,
+    '--on-over-deep': t.onOverDeep,
     '--none': t.none,
     '--badge-yt': t.badgeYoutube,
     '--badge-rb': t.badgeRoblox,
@@ -324,6 +347,10 @@ export function themeCssVars(t) {
     '--accent': t.accent,
     '--on-accent': onAccent(t.accent),
     '--scrim': t.scrim,
+    '--face-body': t.faceBody,
+    '--face-ink': t.faceInk,
+    '--face-sweat': t.faceSweat,
+    '--over-stripe': t.overStripe,
     'color-scheme': t.isDark ? 'dark' : 'light',
   };
 }

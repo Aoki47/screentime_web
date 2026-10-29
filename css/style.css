@@ -174,6 +174,61 @@ h1, h2, h3, p {
   height: calc(var(--hs) * 28px);
 }
 
+/* 全画面のヘッダー: 左に「‹ 戻る」、中央寄りにタイトル、右に時刻と歯車 */
+.back {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: max(44px, calc(var(--hs) * 52px));
+  padding: 0 calc(var(--hs) * 8px) 0 0;
+  border-radius: calc(var(--hs) * 12px);
+}
+
+.back:active {
+  background: var(--card);
+}
+
+.back-ch {
+  padding: 0 calc(var(--hs) * 8px);
+  font-size: calc(var(--hs) * 40px);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.back-tx {
+  font-size: calc(var(--hs) * 20px);
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hdr-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: calc(var(--hs) * 24px);
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hdr-exp .hdr-clock {
+  margin-left: calc(var(--hs) * 10px);
+  font-size: calc(var(--hs) * 32px);
+}
+
+.hdr-exp .gear {
+  width: max(44px, calc(var(--hs) * 46px));
+  height: max(44px, calc(var(--hs) * 46px));
+}
+
+.hdr-exp .gear svg {
+  width: calc(var(--hs) * 26px);
+  height: calc(var(--hs) * 26px);
+}
+
 .chips-row {
   margin-top: calc(var(--hs) * 6px);
 }
@@ -325,32 +380,31 @@ h1, h2, h3, p {
 }
 
 .card-summary {
-  flex: 25 1 0;
-  min-height: 118px;
-  justify-content: space-between;
+  flex: 29 1 0;
+  min-height: 150px;
   padding: calc(var(--cs) * 8px) calc(var(--cs) * 14px);
 }
 
 .card-week {
-  flex: 34 1 0;
+  flex: 31 1 0;
   min-height: 140px;
   padding: calc(var(--cs) * 8px) calc(var(--cs) * 10px);
 }
 
 .card-hourly {
-  flex: 41 1 0;
+  flex: 40 1 0;
   min-height: 165px;
   padding: calc(var(--cs) * 8px) calc(var(--cs) * 14px);
 }
 
 .dash-left .card-summary {
-  flex: 44 1 0;
-  min-height: 100px;
+  flex: 56 1 0;
+  min-height: 130px;
 }
 
 .dash-left .card-week {
-  flex: 56 1 0;
-  min-height: 110px;
+  flex: 44 1 0;
+  min-height: 100px;
 }
 
 .dash-wide > .card-hourly {
@@ -358,7 +412,104 @@ h1, h2, h3, p {
   min-height: 0;
 }
 
-/* ---- サマリー ---- */
+/* ---- 分割表示（電力 + 使用量） ---- */
+
+.dash-split {
+  min-height: 520px;
+}
+
+.dash-split.dash-wide {
+  min-height: 230px;
+}
+
+.card-split {
+  flex: 1 1 0;
+  min-height: 200px;
+  cursor: pointer;
+}
+
+.dash-split.dash-wide .card-split {
+  min-height: 0;
+}
+
+.card-split:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.card-psplit {
+  padding: calc(var(--cs) * 10px) calc(var(--cs) * 14px);
+}
+
+.card-usplit {
+  padding: calc(var(--cs) * 8px) calc(var(--cs) * 14px);
+}
+
+.split-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--cs) * 10px);
+  margin-top: calc(var(--cs) * 6px);
+}
+
+.card-split .chart-area {
+  margin-top: calc(var(--cs) * 4px);
+}
+
+/* ---- 電力の全画面（縦=数字/1週間/時間別、横=左に数字と1週間・右に時間別） ---- */
+
+.dash-power .card-pnum {
+  flex: 25 1 0;
+  min-height: 100px;
+}
+
+.dash-power .card-week {
+  flex: 33 1 0;
+}
+
+.dash-power .card-hourly {
+  flex: 42 1 0;
+}
+
+.dash-power .dash-left .card-pnum {
+  flex: 44 1 0;
+  min-height: 90px;
+}
+
+.dash-power .dash-left .card-week {
+  flex: 56 1 0;
+  min-height: 110px;
+}
+
+.dash-power.dash-wide > .card-hourly {
+  flex: 55 1 0;
+  min-height: 0;
+}
+
+.dash-power > .card-pnum:only-child {
+  flex: 1 1 0;
+}
+
+.card-pnum {
+  padding: calc(var(--cs) * 10px) calc(var(--cs) * 14px);
+}
+
+/* ---- サマリー（案B）: 状態リボン / 2列の時間 / 合計の積み上げ棒 ---- */
+
+.sum {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sum-compact {
+  flex: none;
+  justify-content: flex-start;
+  gap: calc(var(--cs) * 6px);
+}
 
 .summary-top {
   display: flex;
@@ -397,27 +548,94 @@ h1, h2, h3, p {
   to { opacity: 0.5; }
 }
 
+/* 状態リボン（面は ::before に敷いて、色の透明度だけ変える） */
+.ribbon {
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: calc(var(--cs) * 28px);
+  padding: 0 calc(var(--cs) * 8px);
+  border-radius: calc(var(--cs) * 9px);
+  overflow: hidden;
+}
+
+.ribbon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--rb);
+  opacity: 0.16;
+}
+
+.ribbon-ok { color: var(--text); }
+.ribbon-warn { color: var(--warn); }
+.ribbon-over { color: var(--on-over-deep); }
+.ribbon-none { color: var(--text2); }
+
+.ribbon-warn::before { background: var(--warn); opacity: 0.18; }
+.ribbon-over::before { background: var(--over-deep); opacity: 1; }
+.ribbon-none::before { background: var(--track); opacity: 1; }
+
+.ribbon-face {
+  flex: none;
+  display: block;
+  width: calc(var(--cs) * 22px);
+  height: calc(var(--cs) * 22px);
+  margin-right: calc(var(--cs) * 7px);
+}
+
+.ribbon-face-over {
+  width: calc(var(--cs) * 25px);
+  height: calc(var(--cs) * 25px);
+}
+
+.face {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.f-body { fill: var(--face-body); }
+.f-ink-fill { fill: var(--face-ink); }
+.f-ink { stroke: var(--face-ink); }
+.f-sweat { fill: var(--face-sweat); }
+
+.ribbon-text {
+  min-width: 0;
+  font-size: calc(var(--cs) * 17px);
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .summary-cols {
+  flex: none;
   display: flex;
   gap: calc(var(--cs) * 14px);
 }
 
-.usage {
+.app-col {
   flex: 1;
   min-width: 0;
 }
 
-.usage-label {
+.app-label {
   font-size: calc(var(--cs) * 15px);
   line-height: 1.2;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.usage-time {
+.app-time {
   height: calc(var(--cs) * 43.7px);
   line-height: calc(var(--cs) * 43.7px);
   font-weight: 700;
+  color: var(--text);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -425,42 +643,190 @@ h1, h2, h3, p {
 .du-n { font-size: calc(var(--cs) * 38px); }
 .du-u { font-size: calc(var(--cs) * 18px); }
 
-.pbar {
+.sum-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--cs) * 1px);
+}
+
+/* 合計の積み上げ棒（両端は完全な丸め。塗りは丸い両端でクリップ。極小でも丸が見える最小幅 = 棒の太さ） */
+.tbar {
   position: relative;
-  height: calc(var(--cs) * 10px);
-  margin-top: calc(var(--cs) * 3px);
+  height: calc(var(--cs) * 28px);
+}
+
+.tbar-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--cs) * 4px);
+  height: calc(var(--cs) * 20px);
   border-radius: 999px;
   background: var(--track);
   overflow: hidden;
 }
 
-.pbar i {
-  display: block;
-  height: 100%;
-  min-width: calc(var(--cs) * 10px);
-  border-radius: 999px;
+.tbar-fill {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 calc(100% - max(var(--end), calc(var(--cs) * 20px))) 0 0 round calc(var(--cs) * 10px));
 }
 
-.usage-foot {
-  display: flex;
-  align-items: center;
-  margin-top: calc(var(--cs) * 2px);
+.tbar-fill i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
 }
 
-.usage-limit {
-  flex: 1;
+.seg-yt { background: linear-gradient(var(--yt-l), var(--yt)); }
+.seg-rb { background: linear-gradient(var(--rb-l), var(--rb)); }
+
+/* 上限超過部分: 深い赤＋斜線（"/" の半透明の暗い線） */
+.seg-over {
+  background-color: var(--over-deep);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent calc(var(--cs) * 3.18px),
+    var(--over-stripe) calc(var(--cs) * 3.18px),
+    var(--over-stripe) calc(var(--cs) * 4.95px)
+  );
+}
+
+/* 上限線（棒より少し長い縦線） */
+.tbar-limit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--cs) * 2px);
+  margin-left: calc(var(--cs) * -1px);
+  border-radius: 1px;
+  background: var(--text);
+}
+
+.bar-cap {
+  position: relative;
+  height: calc(var(--cs) * 16.8px);
+}
+
+.cap-limit {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
   font-size: calc(var(--cs) * 12px);
   line-height: 1.2;
   color: var(--text2);
   white-space: nowrap;
 }
 
-.usage-over {
+.cap-total {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: calc(var(--cs) * 14px);
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cap-total.over {
+  color: var(--over);
+}
+
+/* ---- 電力の数字 ---- */
+
+.pw-nums {
+  flex: none;
+  display: flex;
+  gap: calc(var(--cs) * 12px);
+}
+
+.pw-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.pw-label {
+  font-size: calc(var(--cs) * 14px);
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.pw-big {
+  font-weight: 700;
+  line-height: calc(var(--cs) * var(--num) * 1.15px);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pn-b { font-size: calc(var(--cs) * var(--num) * 1px); }
+.pn-s { font-size: calc(var(--cs) * var(--num) * 0.45px); }
+
+.pw-sub {
+  font-size: calc(var(--cs) * 14px);
+  line-height: 1.2;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.pw-stale {
   font-size: calc(var(--cs) * 13px);
   line-height: 1.2;
   font-weight: 700;
-  color: var(--over);
+  color: var(--warn);
   white-space: nowrap;
+}
+
+.lv-badge {
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+  border-radius: calc(var(--cs) * 20px);
+  padding: calc(var(--cs) * 2px) calc(var(--cs) * 10px);
+  font-size: calc(var(--cs) * 14px);
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lv-badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+.lv-high { color: var(--warn); }
+.lv-over { color: var(--over); }
+
+/* データなし（電力・使用量）の中央メッセージ */
+.no-data {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 calc(var(--cs) * 14px);
+}
+
+.nd-title {
+  font-size: calc(var(--cs) * 22px);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.nd-sub {
+  margin-top: calc(var(--cs) * 6px);
+  font-size: calc(var(--cs) * 14px);
+  line-height: 1.4;
+  color: var(--text2);
 }
 
 /* ---- 週・時間別 共通 ---- */
@@ -550,6 +916,10 @@ h1, h2, h3, p {
   font-size: calc(var(--cs) * 15px);
   line-height: 1.4;
   color: var(--text2);
+}
+
+.no-hourly.nodata {
+  font-size: calc(var(--cs) * 16px);
 }
 
 .legend {
@@ -714,6 +1084,7 @@ h1, h2, h3, p {
 }
 
 .limit-sw {
+  flex: none;
   display: block;
   width: calc(var(--s) * 8px);
   height: calc(var(--s) * 16px);
@@ -882,6 +1253,24 @@ h1, h2, h3, p {
   width: calc(var(--s) * 24px);
   height: calc(var(--s) * 24px);
   color: var(--accent);
+}
+
+/* ローカル確認用のデモデータ表示中の目印（demo.js の条件を満たすときだけ main.js が追加する） */
+.demo-flag {
+  position: fixed;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 0 8px;
+  border-radius: 0 0 8px 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 700;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

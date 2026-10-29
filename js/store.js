@@ -1,20 +1,20 @@
 // アプリの状態管理（Android版 MainViewModel + ScreenTimeRepository + ThemeRepository の移植）。
 // DOMには触れない。fetch / localStorage / 時計 / タイマー / ID トークン取得は注入できるので Node でテストできる。
 
-import { FETCH_TIMEOUT_MS, POLL_INTERVAL_MS, requestUrl, settingsUrl } from './config.js';
+import { FETCH_TIMEOUT_MS, POLL_INTERVAL_MS, powerSettingsUrl, requestUrl, settingsUrl } from './config.js';
 import {
   Selection,
   SELECTION_TIMEOUT_MS,
   clampLimit,
-  effectiveRobloxLimitMin,
-  effectiveYoutubeLimitMin,
+  effectiveTotalLimitMinOf,
   isReflected,
   localIsoDate,
   patchBody,
   stepDown,
   stepUp,
 } from './logic.js';
-import { parse } from './parser.js';
+import { emptyPower, parse } from './parser.js';
+import * as Power from './power.js';
 import { findThemeOrDefault } from './themes.js';
 
 export const KEY_RAW_JSON = 'screentime_raw_json';
@@ -36,6 +36,17 @@ export function currentUser(state) {
   if (!u) return null;
   const pending = state.pendingSettings[u.uid];
   return pending ? { ...u, settings: pending } : u;
+}
+
+/**
+ * 電力データ。楽観更新した電力設定を重ねた実効データ（無ければ null）。
+ * Android の ScreenTimeUiState.power。
+ */
+export function effectivePower(state) {
+  const p = state.data?.power ?? null;
+  const pending = state.pendingPowerSettings;
+  if (!pending) return p;
+  return { ...(p ?? emptyPower()), settings: pending };
 }
 
 /** localStorage 互換のストレージを例外安全に包む（プライベートモード等で投げても無視）。 */
@@ -84,15 +95,20 @@ export class Store {
       // 起動時に同期復元（フラッシュ防止）
       themeId: findThemeOrDefault(storage.get(KEY_THEME_ID)).id,
       showSettings: false,
-      limitDraft: null,    // {uid,name,youtubeMin,robloxMin}
+      limitDraft: null,    // {uid,name,totalMin} 合計の上限の下書き
       saveStatus: 'idle',  // idle | saving | saved | failed
-      pendingSettings: {}, // uid → {limitYoutubeMin, limitRobloxMin, updatedAt}
+      pendingSettings: {}, // uid → {limitYoutubeMin:null, limitRobloxMin:null, limitTotalMin, updatedAt}
+      expanded: null,      // 全画面で開いているパネル（'power' | 'usage'）。null = 分割表示（電力＋使用量）
+      powerDraft: null,    // {warnW, yenPerKwh} 電力設定の下書き
+      powerSaveStatus: 'idle', // idle | saving | saved | failed
+      pendingPowerSettings: null, // 保存済み(楽観更新)の電力設定 {warnW, yenPerKwh, updatedAt}
     };
 
     this.clockTimer = null;
     this.pollTimer = null;
     this.revertTimer = null;
     this.statusTimer = null;
+    this.powerStatusTimer = null;
   }
 
   subscribe(fn) {
@@ -138,6 +154,10 @@ export class Store {
       limitDraft: null,
       saveStatus: 'idle',
       pendingSettings: {},
+      expanded: null,
+      powerDraft: null,
+      powerSaveStatus: 'idle',
+      pendingPowerSettings: null,
     });
   }
 
@@ -210,19 +230,29 @@ export class Store {
 
   // ---------------- 設定オーバーレイ ----------------
 
-  /** 設定オーバーレイを開く。上限の下書きは現在の実効値（settings > profile）で初期化する。 */
+  /** パネルを全画面で開く（'power' | 'usage'）。 */
+  expand(panel) {
+    this.set({ expanded: panel });
+  }
+
+  /** 全画面から分割表示へ戻る。 */
+  collapse() {
+    if (this.state.expanded !== null) this.set({ expanded: null });
+  }
+
+  /**
+   * 設定オーバーレイを開く。合計の上限の下書きは現在の実効値（settings.limitTotalMin → 無ければ個別の和）、
+   * 電力設定の下書きは現在の実効設定で初期化する。
+   */
   openSettings() {
     const u = currentUser(this.state);
     this.set({
       showSettings: true,
       saveStatus: 'idle',
+      powerSaveStatus: 'idle',
+      powerDraft: Power.draftFrom(effectivePower(this.state)?.settings),
       limitDraft: u
-        ? {
-            uid: u.uid,
-            name: u.displayName,
-            youtubeMin: effectiveYoutubeLimitMin(u) ?? 0,
-            robloxMin: effectiveRobloxLimitMin(u) ?? 0,
-          }
+        ? { uid: u.uid, name: u.displayName, totalMin: clampLimit(effectiveTotalLimitMinOf(u) ?? 0) }
         : null,
     });
   }
@@ -230,33 +260,34 @@ export class Store {
   /** 設定オーバーレイを閉じる。未保存の編集は破棄する。 */
   closeSettings() {
     if (this.statusTimer !== null) this.timers.clearTimeout(this.statusTimer);
+    if (this.powerStatusTimer !== null) this.timers.clearTimeout(this.powerStatusTimer);
     this.set({
       showSettings: false,
       limitDraft: null,
       saveStatus: this.state.saveStatus === 'saving' ? 'saving' : 'idle',
+      powerDraft: null,
+      powerSaveStatus: this.state.powerSaveStatus === 'saving' ? 'saving' : 'idle',
     });
   }
 
-  /** ステッパー操作。app('youtube'|'roblox') の下書き値を15分刻みで増減（0..480分）。 */
-  onLimitStep(app, up) {
+  /** ステッパー操作。合計の上限の下書き値を15分刻みで増減（0..600分）。 */
+  onLimitStep(up) {
     const d = this.state.limitDraft;
     if (!d) return;
-    const step = (v) => (up ? stepUp(v) : stepDown(v));
-    const next = app === 'youtube' ? { ...d, youtubeMin: step(d.youtubeMin) } : { ...d, robloxMin: step(d.robloxMin) };
+    const totalMin = up ? stepUp(d.totalMin) : stepDown(d.totalMin);
     // 編集を再開したら「保存しました/失敗」の表示は消す
-    this.set({ limitDraft: next, saveStatus: this.state.saveStatus === 'saving' ? 'saving' : 'idle' });
+    this.set({ limitDraft: { ...d, totalMin }, saveStatus: this.state.saveStatus === 'saving' ? 'saving' : 'idle' });
   }
 
   /**
-   * 下書きの上限を保存する。表示は即時（楽観更新）に反映し、PATCHが失敗したら元に戻して
+   * 下書きの合計の上限を保存する。表示は即時（楽観更新）に反映し、PATCHが失敗したら元に戻して
    * インラインで知らせる。成功したらサーバーの値を再取得する。
    * @returns {Promise<boolean|undefined>} 保存結果（実行しなかった場合は undefined）
    */
   async saveLimits() {
     const draft = this.state.limitDraft;
     if (!draft || this.state.saveStatus === 'saving') return undefined;
-    const yt = clampLimit(draft.youtubeMin);
-    const rb = clampLimit(draft.robloxMin);
+    const total = clampLimit(draft.totalMin);
     const nowSec = Math.floor(this.nowMs() / 1000);
     const previous = this.state.pendingSettings[draft.uid];
     if (this.statusTimer !== null) this.timers.clearTimeout(this.statusTimer);
@@ -264,11 +295,11 @@ export class Store {
       saveStatus: 'saving',
       pendingSettings: {
         ...this.state.pendingSettings,
-        [draft.uid]: { limitYoutubeMin: yt, limitRobloxMin: rb, updatedAt: nowSec },
+        [draft.uid]: { limitYoutubeMin: null, limitRobloxMin: null, limitTotalMin: total, updatedAt: nowSec },
       },
     });
 
-    const ok = await this.saveSettings(draft.uid, yt, rb, nowSec);
+    const ok = await this.saveSettings(draft.uid, total, nowSec);
 
     if (ok) {
       this.set({ saveStatus: 'saved' });
@@ -285,6 +316,53 @@ export class Store {
 
     if (ok) {
       // 取得中の古い応答に上書きされないよう、取得が終わってから再取得する
+      while (this.state.isRefreshing) await new Promise((r) => this.timers.setTimeout(r, 100));
+      await this.refresh();
+    }
+    return ok;
+  }
+
+  /** 電力設定のステッパー。field('warn'|'yen') の下書き値を増減（警告=500W刻み 1000..8000、単価=1円刻み 10..80）。 */
+  onPowerStep(field, up) {
+    const d = this.state.powerDraft;
+    if (!d) return;
+    const next =
+      field === 'warn'
+        ? { ...d, warnW: up ? Power.stepWarnUp(d.warnW) : Power.stepWarnDown(d.warnW) }
+        : { ...d, yenPerKwh: up ? Power.stepYenUp(d.yenPerKwh) : Power.stepYenDown(d.yenPerKwh) };
+    this.set({
+      powerDraft: next,
+      powerSaveStatus: this.state.powerSaveStatus === 'saving' ? 'saving' : 'idle',
+    });
+  }
+
+  /**
+   * 電力設定の下書きを保存する。上限の保存と同じく楽観更新し、PATCHが失敗したら元に戻す。
+   * 成功したらサーバーの値を再取得する。
+   * @returns {Promise<boolean|undefined>} 保存結果（実行しなかった場合は undefined）
+   */
+  async savePowerSettings() {
+    const draft = this.state.powerDraft;
+    if (!draft || this.state.powerSaveStatus === 'saving') return undefined;
+    const warn = Power.clampWarn(draft.warnW);
+    const yen = Power.clampYen(draft.yenPerKwh);
+    const nowSec = Math.floor(this.nowMs() / 1000);
+    const previous = this.state.pendingPowerSettings;
+    if (this.powerStatusTimer !== null) this.timers.clearTimeout(this.powerStatusTimer);
+    this.set({
+      powerSaveStatus: 'saving',
+      pendingPowerSettings: { warnW: warn, yenPerKwh: yen, updatedAt: nowSec },
+    });
+
+    const ok = await this.savePowerSettingsRemote(warn, yen, nowSec);
+
+    if (ok) this.set({ powerSaveStatus: 'saved' });
+    else this.set({ powerSaveStatus: 'failed', pendingPowerSettings: previous });
+    this.powerStatusTimer = this.timers.setTimeout(() => {
+      if (this.state.powerSaveStatus !== 'saving') this.set({ powerSaveStatus: 'idle' });
+    }, ok ? 3_000 : 4_000);
+
+    if (ok) {
       while (this.state.isRefreshing) await new Promise((r) => this.timers.setTimeout(r, 100));
       await this.refresh();
     }
@@ -344,21 +422,40 @@ export class Store {
     }
   }
 
-  /** 上限設定を `PATCH /screentime/users/{uid}/settings.json` で書き込む。成功(2xx)なら true。 */
-  async saveSettings(uid, youtubeMin, robloxMin, updatedAtSec) {
+  /** PATCH を送る。成功(2xx)なら true。401/403 は認証エラー状態にする。 */
+  async patchJson(url, body) {
     try {
-      const url = settingsUrl(uid, await this.token());
-      if (!url) return false;
       return await this.withTimeout(async (signal) => {
         const res = await this.fetchImpl(url, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: patchBody(youtubeMin, robloxMin, updatedAtSec),
+          body,
           signal,
         });
         if (isAuthStatus(res.status)) this.set({ status: STATUS_AUTH_ERROR });
         return res.ok;
       });
+    } catch {
+      return false;
+    }
+  }
+
+  /** 合計の上限を `PATCH /screentime/users/{uid}/settings.json` で書き込む（`{limitTotalMin, updatedAt}` のみ）。成功(2xx)なら true。 */
+  async saveSettings(uid, totalMin, updatedAtSec) {
+    try {
+      const url = settingsUrl(uid, await this.token());
+      if (!url) return false;
+      return await this.patchJson(url, patchBody(totalMin, updatedAtSec));
+    } catch {
+      return false;
+    }
+  }
+
+  /** 電力設定を `PATCH /screentime/power/settings.json` で書き込む。成功(2xx)なら true。 */
+  async savePowerSettingsRemote(warn, yen, updatedAtSec) {
+    try {
+      const url = powerSettingsUrl(await this.token());
+      return await this.patchJson(url, Power.patchBody(warn, yen, updatedAtSec));
     } catch {
       return false;
     }
@@ -392,6 +489,10 @@ export class Store {
         status: result.authError ? STATUS_AUTH_ERROR : STATUS_OK,
         online: result.online,
         pendingSettings: result.online ? this.reconcilePending(s.pendingSettings, result.data) : s.pendingSettings,
+        pendingPowerSettings:
+          s.pendingPowerSettings && !(result.online && Power.isReflected(result.data?.power?.settings, s.pendingPowerSettings))
+            ? s.pendingPowerSettings
+            : null,
       });
     } finally {
       this.set({ isRefreshing: false });

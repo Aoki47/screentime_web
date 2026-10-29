@@ -27,7 +27,12 @@ export function requestUrl(token) {
   return buildUrl(BASE_URL, NODE_PATH, token);
 }
 
-const UID_REGEX = /^[A-Za-z0-9_-]{1,32}$/;
+/** 電力設定の書き込みURL `{BASE_URL}/screentime/power/settings.json[?auth=token]`（Android の powerSettingsUrl）。 */
+export function powerSettingsUrl(token) {
+  return buildUrl(BASE_URL, `${NODE_PATH}/power/settings`, token);
+}
+
+const UID_REGEX =/^[A-Za-z0-9_-]{1,32}$/;
 
 /** 上限設定の書き込みURL `{BASE_URL}/screentime/users/{uid}/settings.json`。uid が不正なら null。 */
 export function settingsUrl(uid, token) {

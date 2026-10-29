@@ -1,4 +1,5 @@
-// 画面表示用の純粋ロジック（Android版 ScreenTimeLogic / SelectionState / LimitSettingsLogic の移植）。
+// 画面表示用の純粋ロジック（Android版 ScreenTimeLogic / TotalUsageLogic / SelectionState / LimitSettingsLogic の移植）。
+// 電力の表示ロジック・電力設定ステッパーは js/power.js。
 // DOMには触れず、Nodeでユニットテストできる。
 //
 // 日付は "yyyy-MM-dd" 文字列（ローカル日付）で扱う。
@@ -106,37 +107,9 @@ export function usageLevel(usedSec, limitMin) {
   return 'ok';
 }
 
-/** 進捗率を0..1にクランプ。上限なしは0。 */
-export function progress(usedSec, limitMin) {
-  if (!hasLimit(limitMin)) return 0;
-  return Math.min(1, Math.max(0, usedSec / (limitMin * 60)));
-}
-
 /** 「上限 2時間」/「上限なし」 */
 export function limitText(limitMin) {
   return hasLimit(limitMin) ? `上限 ${formatDuration(limitMin * 60)}` : '上限なし';
-}
-
-/** 上限超過時のみ「+15分超過」（超過分は分単位に切り上げ。上限以内/上限なしはnull）。 */
-export function overText(usedSec, limitMin) {
-  if (!hasLimit(limitMin)) return null;
-  const over = usedSec - limitMin * 60;
-  if (over <= 0) return null;
-  const roundedUp = Math.floor((over + 59) / 60) * 60;
-  return `+${formatDuration(roundedUp)}超過`;
-}
-
-export function usageRow(usedSec, limitMin) {
-  const used = usedSec < 0 ? 0 : usedSec;
-  return {
-    usedSec: used,
-    timeText: formatDuration(used),
-    level: usageLevel(used, limitMin),
-    progress: progress(used, limitMin),
-    limitText: limitText(limitMin),
-    overText: overText(used, limitMin),
-    limitMin: hasLimit(limitMin) ? limitMin : null,
-  };
 }
 
 // ---------------- 7日グラフ ----------------
@@ -262,19 +235,135 @@ export function effectiveRobloxLimitMin(user) {
   return effectiveLimitMin(user.settings?.limitRobloxMin, user.profile?.limitRobloxMin);
 }
 
+/**
+ * 合計（YouTube+Roblox）の実効上限(分)。
+ * - settingsTotalMin（`settings.limitTotalMin`）があればそれ（0以下 = 上限なし = null）。
+ * - 無ければ個別の実効上限（youtubeMin・robloxMin。null/0は0として数える）の和。和が0なら上限なし。
+ * 例: YouTube 60 + Roblox 60 の既存データは移行なしで合計120分の上限になる。
+ */
+export function effectiveTotalLimitMin(settingsTotalMin, youtubeMin, robloxMin) {
+  if (settingsTotalMin !== null && settingsTotalMin !== undefined) {
+    return settingsTotalMin > 0 ? settingsTotalMin : null;
+  }
+  const sum = Math.max(youtubeMin ?? 0, 0) + Math.max(robloxMin ?? 0, 0);
+  return sum > 0 ? sum : null;
+}
+
+/** ユーザーの合計の実効上限(分)。Android の effectiveTotalLimitMin(user)。 */
+export function effectiveTotalLimitMinOf(user) {
+  return effectiveTotalLimitMin(
+    user.settings?.limitTotalMin ?? null,
+    effectiveYoutubeLimitMin(user),
+    effectiveRobloxLimitMin(user),
+  );
+}
+
 export function buildCard(user, today, nowEpochSec) {
   const todayUsage = user.days.get(today);
-  const ytLimit = effectiveYoutubeLimitMin(user);
-  const rbLimit = effectiveRobloxLimitMin(user);
-  const limitSumSec = (hasLimit(ytLimit) ? ytLimit * 60 : 0) + (hasLimit(rbLimit) ? rbLimit * 60 : 0);
+  const limitMin = effectiveTotalLimitMinOf(user);
   return {
     uid: user.uid,
     name: user.displayName,
     nowApp: nowBadge(user.now, nowEpochSec),
-    youtube: usageRow(todayUsage?.youtubeSec ?? 0, ytLimit),
-    roblox: usageRow(todayUsage?.robloxSec ?? 0, rbLimit),
+    usage: totalUsageModel(todayUsage?.youtubeSec ?? 0, todayUsage?.robloxSec ?? 0, limitMin),
     bars: last7Days(user.days, today),
-    limitSumSec,
+    /** 合計の上限（秒）。上限なしなら0（週グラフの破線に使う） */
+    limitTotalSec: hasLimit(limitMin) ? limitMin * 60 : 0,
+  };
+}
+
+// ---------------- 合計（YouTube+Roblox）の使用状況サマリー（TotalUsageLogic.kt） ----------------
+
+/** 上限あり: 軸の最大 = max(上限 × この値, 合計 × AXIS_TOTAL_PAD) */
+export const AXIS_LIMIT_FACTOR = 1.3;
+/** 上限あり: 合計が軸の右端に張り付かないための余白 */
+export const AXIS_TOTAL_PAD = 1.06;
+/** 上限なし: 軸の最大 = max(合計 × この値, AXIS_MIN_NO_LIMIT_SEC) */
+export const AXIS_NO_LIMIT_FACTOR = 1.1;
+/** 上限なし: 軸の最小（1時間） */
+export const AXIS_MIN_NO_LIMIT_SEC = 3600;
+
+/** 横棒の1区間（軸全体に対する位置の割合 0..1）。 */
+const span = (start, end) => ({ start, end, isEmpty: end <= start });
+
+/** 上限までの残り(分、秒は切り捨て)。上限なし・超過は null。 */
+export function remainingMin(totalSec, limitMin) {
+  if (!hasLimit(limitMin)) return null;
+  const left = limitMin * 60 - Math.max(totalSec, 0);
+  if (left < 0) return null;
+  return Math.floor(left / 60);
+}
+
+/** 上限超過分(分、秒は切り上げ)。上限なし・上限以内は null。 */
+export function overMin(totalSec, limitMin) {
+  if (!hasLimit(limitMin)) return null;
+  const over = totalSec - limitMin * 60;
+  if (over <= 0) return null;
+  return Math.floor((over + 59) / 60);
+}
+
+/** リボンの文言。OK=「あと25分 遊べる」/ WARN=「あと8分」/ OVER=「合計20分オーバー！」/ NONE=「上限なし」。 */
+export function ribbonText(level, remaining, over) {
+  switch (level) {
+    case 'ok': return `あと${formatDuration((remaining ?? 0) * 60)} 遊べる`;
+    case 'warn': return `あと${formatDuration((remaining ?? 0) * 60)}`;
+    case 'over': return `合計${formatDuration((over ?? 0) * 60)}オーバー！`;
+    default: return '上限なし';
+  }
+}
+
+/**
+ * 積み上げ棒の区間。YouTube → Roblox の順に左から積み、合計のうち上限を超えた部分だけを「超過」として
+ * （どのアプリの分かに関わらず）上限位置から右へ塗る。上限以内の部分は各アプリの区間のまま。
+ * 軸の最大: 上限あり = max(上限×1.3, 合計×1.06) / 上限なし = max(合計×1.1, 1時間)。
+ * @returns {{axisMaxSec:number, youtube:{start:number,end:number,isEmpty:boolean}, roblox:object, over:object, limitPos:number|null}}
+ */
+export function barGeometry(youtubeSec, robloxSec, limitMin) {
+  const y = Math.max(youtubeSec, 0);
+  const r = Math.max(robloxSec, 0);
+  const total = y + r;
+  const limited = hasLimit(limitMin);
+  const limitSec = limited ? limitMin * 60 : 0;
+  const axis = limited
+    ? Math.max(limitSec * AXIS_LIMIT_FACTOR, total * AXIS_TOTAL_PAD)
+    : Math.max(total * AXIS_NO_LIMIT_FACTOR, AXIS_MIN_NO_LIMIT_SEC);
+  // 上限以内に収まる合計（上限なしは全量）
+  const within = limited ? Math.min(total, limitSec) : total;
+  const yIn = Math.min(y, within);
+  const rIn = Math.min(r, within - yIn);
+  const f = (sec) => sec / axis;
+  return {
+    axisMaxSec: axis,
+    youtube: span(0, f(yIn)),
+    roblox: span(f(yIn), f(yIn + rIn)),
+    over: span(f(within), f(total)),
+    limitPos: limited ? f(limitSec) : null,
+  };
+}
+
+/** 今日の YouTube / Roblox 秒数と合計の上限(分)から表示モデルを作る。 */
+export function totalUsageModel(youtubeSec, robloxSec, limitMin) {
+  const y = Math.max(youtubeSec, 0);
+  const r = Math.max(robloxSec, 0);
+  const total = y + r;
+  const limit = hasLimit(limitMin) ? limitMin : null;
+  const level = usageLevel(total, limit);
+  const remaining = remainingMin(total, limit);
+  const over = overMin(total, limit);
+  return {
+    youtubeSec: y,
+    robloxSec: r,
+    totalSec: total,
+    youtubeText: formatDuration(y),
+    robloxText: formatDuration(r),
+    totalText: `合計 ${formatDuration(total)}`,
+    limitMin: limit,
+    level,
+    remainingMin: remaining,
+    overMin: over,
+    ribbonText: ribbonText(level, remaining, over),
+    limitText: limit !== null ? limitText(limit) : null,
+    bar: barGeometry(y, r, limit),
   };
 }
 
@@ -317,8 +406,8 @@ export const Selection = {
 /** ステッパーの刻み（分） */
 export const STEP_MIN = 15;
 
-/** 上限の最大値（分）= 8時間 */
-export const MAX_MIN = 480;
+/** 上限の最大値（分）= 10時間 */
+export const MAX_MIN = 600;
 
 /** 範囲 0..MAX_MIN に収める。 */
 export function clampLimit(min) {
@@ -341,18 +430,22 @@ export function limitValueText(min) {
   return min <= 0 ? '上限なし' : formatDuration(min * 60);
 }
 
-/** PATCHの本文JSON `{"limitYoutubeMin":90,"limitRobloxMin":60,"updatedAt":1793000000}`。キー順は固定。 */
-export function patchBody(youtubeMin, robloxMin, updatedAtSec) {
+/** PATCHの本文JSON `{"limitTotalMin":120,"updatedAt":1793000000}`。個別の上限は送らない。キー順は固定。 */
+export function patchBody(totalMin, updatedAtSec) {
   return JSON.stringify({
-    limitYoutubeMin: clampLimit(youtubeMin),
-    limitRobloxMin: clampLimit(robloxMin),
+    limitTotalMin: clampLimit(totalMin),
     updatedAt: updatedAtSec,
   });
 }
 
-/** 保存済み(pending)の設定を、サーバーから取得したデータが反映済みか（updatedAt が同じか新しい）。 */
+/**
+ * 保存済み(pending)の設定を、サーバーから取得したデータが反映済みか。
+ * 取得側に limitTotalMin があり、かつ updatedAt が同じか新しいときだけ反映済み。
+ * （旧版・Web旧版が個別の上限だけを新しい updatedAt で書いても、合計の上限が無い間は反映済みとみなさない。）
+ */
 export function isReflected(fetched, pending) {
-  const f = fetched?.updatedAt;
+  if (fetched?.limitTotalMin === null || fetched?.limitTotalMin === undefined) return false;
+  const f = fetched.updatedAt;
   const p = pending?.updatedAt;
   if (f === null || f === undefined || p === null || p === undefined) return false;
   return f >= p;

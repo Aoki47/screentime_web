@@ -1,9 +1,10 @@
 // エントリポイント: ストアとDOMをつなぐ（描画・イベント委譲・寸法の反映・ライフサイクル）。
 
-import { hourlyChartSvg, weekChartSvg } from './charts.js';
-import { Store, safeStorage } from './store.js';
+import { renderChart } from './charts.js';
+import { demoMode, demoStorage } from './demo.js';
+import { KEY_RAW_JSON, Store, safeStorage } from './store.js';
 import { findThemeOrDefault, themeBgColor } from './themes.js';
-import { cardScale, isWide, loginErrorText, overlayScale, pageScale, renderGate, renderMain, renderOverlay } from './ui.js';
+import { captionLimitX, cardScale, isWide, loginErrorText, overlayScale, pageScale, renderGate, renderMain, renderOverlay } from './ui.js';
 
 const root = document.documentElement;
 const appEl = document.getElementById('app');
@@ -16,6 +17,10 @@ try {
 } catch {
   rawStorage = null; // プライベートモード等
 }
+
+// ローカル確認用デモ（localhost / 127.0.0.1 かつ ?demo=1|under のときだけ。それ以外のホストでは常に null）
+const demo = demoMode(window.location);
+let demoBackend = null;
 
 // 認証モジュール（Firebase SDK を CDN から読む）。読み込めなくても画面は出し、ログイン画面でエラーを知らせる。
 let authMod = null;
@@ -37,9 +42,10 @@ function loadAuth() {
   return authLoading;
 }
 
+const baseStorage = safeStorage(rawStorage);
 const store = new Store({
-  fetchImpl: (...args) => fetch(...args),
-  storage: safeStorage(rawStorage),
+  fetchImpl: (...args) => (demoBackend ? demoBackend.fetch(...args) : fetch(...args)),
+  storage: demo ? demoStorage(baseStorage, KEY_RAW_JSON) : baseStorage,
   getToken: async () => (authMod ? authMod.getToken() : null),
 });
 
@@ -78,46 +84,42 @@ function renderApp() {
   fit();
 }
 
-/** カードのスケール（--cs）を反映し、チャートを実寸で描く。 */
+/** カードのスケール（--cs）を反映し、チャートを実寸で描き、棒の下の文字位置を補正する。 */
 function fit() {
   const vp = viewport();
   root.style.setProperty('--hs', pageScale(vp.width, vp.height).toFixed(4));
 
-  const cards = appEl.querySelectorAll('[data-card]');
-  const scales = {};
-  cards.forEach((el) => {
+  const scales = new Map();
+  appEl.querySelectorAll('[data-card]').forEach((el) => {
     const cs = cardScale(el.dataset.card, el.offsetWidth, el.offsetHeight);
-    scales[el.dataset.card] = cs;
+    scales.set(el, cs);
     el.style.setProperty('--cs', cs.toFixed(4));
   });
 
   if (lastCharts) {
-    const weekEl = appEl.querySelector('[data-chart="week"]');
-    if (weekEl) {
-      weekEl.querySelector(':scope > svg')?.remove();
-      const svg = weekChartSvg(
-        lastCharts.week.bars,
-        lastCharts.week.selectedDate,
-        lastCharts.week.limitSumSec,
-        weekEl.clientWidth,
-        weekEl.clientHeight,
-        scales.week ?? 1,
+    appEl.querySelectorAll('[data-chart]').forEach((el) => {
+      el.querySelector(':scope > svg')?.remove();
+      const svg = renderChart(
+        el.dataset.chart,
+        lastCharts[el.dataset.chart],
+        el.clientWidth,
+        el.clientHeight,
+        scales.get(el.closest('[data-card]')) ?? 1,
       );
-      weekEl.insertAdjacentHTML('afterbegin', svg);
-    }
-    const hourlyEl = appEl.querySelector('[data-chart="hourly"]');
-    if (hourlyEl && lastCharts.hourly) {
-      hourlyEl.querySelector(':scope > svg')?.remove();
-      const svg = hourlyChartSvg(
-        lastCharts.hourly.hours,
-        lastCharts.hourly.currentHour,
-        hourlyEl.clientWidth,
-        hourlyEl.clientHeight,
-        scales.hourly ?? 1,
-      );
-      hourlyEl.insertAdjacentHTML('afterbegin', svg);
-    }
+      if (svg) el.insertAdjacentHTML('afterbegin', svg);
+    });
   }
+
+  // 合計の棒の下の「上限 …」を、上限線の真下に寄せつつ「合計」文字と重ならないように置く
+  appEl.querySelectorAll('.bar-cap').forEach((cap) => {
+    const limit = cap.querySelector('.cap-limit');
+    const total = cap.querySelector('.cap-total');
+    if (!limit || !total) return;
+    const cs = scales.get(cap.closest('[data-card]')) ?? 1;
+    const x = captionLimitX(Number(limit.dataset.limitPos), cap.clientWidth, limit.offsetWidth, total.offsetWidth, 8 * cs);
+    limit.style.transform = 'none';
+    limit.style.left = `${x}px`;
+  });
   fitOverlay();
 }
 
@@ -135,15 +137,15 @@ function fitOverlay() {
 function focusSignature() {
   const a = document.activeElement;
   if (!a || !overlayEl.contains(a) || !a.dataset?.action) return null;
-  return ['action', 'app', 'dir', 'id'].map((k) => a.dataset[k] ?? '').join('|');
+  return ['action', 'field', 'dir', 'id'].map((k) => a.dataset[k] ?? '').join('|');
 }
 
 function restoreFocus(sig) {
   if (!sig) return;
-  const [action, app, dir, id] = sig.split('|');
+  const [action, field, dir, id] = sig.split('|');
   for (const el of overlayEl.querySelectorAll('[data-action]')) {
     const d = el.dataset;
-    if (d.action === action && (d.app ?? '') === app && (d.dir ?? '') === dir && (d.id ?? '') === id) {
+    if (d.action === action && (d.field ?? '') === field && (d.dir ?? '') === dir && (d.id ?? '') === id) {
       el.focus({ preventScroll: true });
       return;
     }
@@ -180,9 +182,52 @@ function renderOverlayUi() {
   wasOverlayOpen = true;
 }
 
+// ---------------- 全画面パネルと履歴 ----------------
+// 「‹ 戻る」ボタンが主な戻り方。加えてブラウザの戻る操作（iPhone のホーム画面アプリのエッジスワイプ等）と Escape でも
+// 分割表示へ戻れるよう、全画面に入るときに履歴を1つ積む（戻るボタンは history.back() で積んだ履歴も消費する）。
+
+function expandPanel(panel) {
+  if (store.state.expanded === panel) return;
+  store.expand(panel);
+  try {
+    history.pushState({ stPanel: panel }, '');
+  } catch { /* 履歴が使えない環境では戻るボタンだけで戻る */ }
+}
+
+function collapsePanel() {
+  if (store.state.expanded === null) return;
+  if (history.state && history.state.stPanel) {
+    try {
+      history.back(); // popstate で collapse される
+      setTimeout(() => store.collapse(), 400); // popstate が来ない環境の保険（collapse は冪等）
+      return;
+    } catch { /* 下の collapse へ */ }
+  }
+  store.collapse();
+}
+
+window.addEventListener('popstate', () => {
+  if (store.state.showSettings) {
+    // 設定を開いている間の戻る操作は、まず設定を閉じる（全画面は維持するため履歴を積み直す）
+    store.closeSettings();
+    if (store.state.expanded !== null) {
+      try {
+        history.pushState({ stPanel: store.state.expanded }, '');
+      } catch { /* 無視 */ }
+    }
+    return;
+  }
+  store.collapse();
+});
+
+// 再読み込み後は全画面ではないので、残った履歴状態は捨てる
+try {
+  if (history.state && history.state.stPanel) history.replaceState(null, '');
+} catch { /* 無視 */ }
+
 // ---------------- 購読 ----------------
 
-const MAIN_KEYS = ['nowMs', 'data', 'loaded', 'online', 'selection', 'selectedUid', 'themeId', 'pendingSettings', 'status', 'auth'];
+const MAIN_KEYS = ['nowMs', 'data', 'loaded', 'online', 'selection', 'selectedUid', 'themeId', 'pendingSettings', 'pendingPowerSettings', 'expanded', 'status', 'auth'];
 
 store.subscribe((s, p) => {
   if (s.themeId !== p.themeId) applyTheme(s.themeId);
@@ -191,6 +236,8 @@ store.subscribe((s, p) => {
     s.showSettings !== p.showSettings ||
     s.limitDraft !== p.limitDraft ||
     s.saveStatus !== p.saveStatus ||
+    s.powerDraft !== p.powerDraft ||
+    s.powerSaveStatus !== p.powerSaveStatus ||
     s.themeId !== p.themeId ||
     s.auth !== p.auth
   ) {
@@ -208,10 +255,14 @@ document.addEventListener('click', (e) => {
     case 'open-settings': store.openSettings(); break;
     case 'close-settings': store.closeSettings(); break;
     case 'scrim': if (e.target === el) store.closeSettings(); break; // パネル内のタップでは閉じない
+    case 'expand': expandPanel(d.panel); break;
+    case 'collapse': collapsePanel(); break;
     case 'select-day': store.onSelectDay(d.date); break;
     case 'select-user': store.onSelectUser(d.uid); break;
-    case 'step': store.onLimitStep(d.app, d.dir === 'up'); break;
+    case 'step': store.onLimitStep(d.dir === 'up'); break;
     case 'save': store.saveLimits(); break;
+    case 'power-step': store.onPowerStep(d.field, d.dir === 'up'); break;
+    case 'power-save': store.savePowerSettings(); break;
     case 'theme': store.selectTheme(d.id); break;
     case 'sign-in':
       // ポップアップ可否のため、読み込み済みならユーザー操作の同期区間内で呼ぶ
@@ -226,25 +277,40 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (!store.state.showSettings) return;
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    store.closeSettings();
+  if (store.state.showSettings) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      store.closeSettings();
+      return;
+    }
+    if (e.key === 'Tab') {
+      // フォーカスをパネル内に留める
+      const items = [...overlayEl.querySelectorAll('button:not([disabled])')];
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !overlayEl.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !overlayEl.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
     return;
   }
-  if (e.key === 'Tab') {
-    // フォーカスをパネル内に留める
-    const items = [...overlayEl.querySelectorAll('button:not([disabled])')];
-    if (items.length === 0) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || !overlayEl.contains(active))) {
+  if (e.key === 'Escape' && store.state.expanded !== null) {
+    e.preventDefault();
+    collapsePanel();
+    return;
+  }
+  // 分割表示のカード（role="button"）は Enter / Space でも開く
+  if ((e.key === 'Enter' || e.key === ' ') && e.target instanceof Element) {
+    const el = e.target.closest('[role="button"][data-action]');
+    if (el) {
       e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && (active === last || !overlayEl.contains(active))) {
-      e.preventDefault();
-      first.focus();
+      el.click();
     }
   }
 });
@@ -300,11 +366,27 @@ function onAuthUser(user) {
   }
 }
 
+/** デモ起動: 認証を使わず、同梱のデモデータ（demo-data.js）で動かす。ネットワークには出ない。 */
+function startDemo(mode) {
+  import('./demo-data.js').then((m) => {
+    demoBackend = m.createDemoBackend(mode);
+    const flag = document.createElement('div');
+    flag.className = 'demo-flag';
+    flag.textContent = `デモデータ（${mode === 'under' ? '上限以内' : '上限超過'}）`;
+    document.body.appendChild(flag);
+    onAuthUser({ email: 'デモ' });
+  });
+}
+
 applyTheme(store.state.themeId);
 renderApp(); // 認証状態が確定するまでは「読み込み中…」
-loadAuth()
-  .then((m) => {
-    m.onAuthError((e) => store.setAuthError(e ? loginErrorText(e.code) : null));
-    m.onUser(onAuthUser);
-  })
-  .catch(showAuthLoadError);
+if (demo) {
+  startDemo(demo);
+} else {
+  loadAuth()
+    .then((m) => {
+      m.onAuthError((e) => store.setAuthError(e ? loginErrorText(e.code) : null));
+      m.onUser(onAuthUser);
+    })
+    .catch(showAuthLoadError);
+}

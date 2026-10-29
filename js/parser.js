@@ -2,12 +2,14 @@
 // どのフィールドが欠けていても、数値がint/float/数値文字列のどれでも、ルートが null でも例外を出さない。
 //
 // データ形状（すべてプレーンオブジェクト。days だけ Map<'yyyy-MM-dd', DayUsage>）:
-//   ScreenTimeData { users: UserData[] }            // 表示順（profile.order → uid）にソート済み
+//   ScreenTimeData { users: UserData[], power: PowerData|null }   // users は表示順（profile.order → uid）にソート済み
 //   UserData { uid, profile, settings|null, days, now|null, agent|null, displayName }
 //   profile { name, order, limitYoutubeMin, limitRobloxMin }       // 各 null 可
-//   settings { limitYoutubeMin, limitRobloxMin, updatedAt }        // 各 null 可
+//   settings { limitYoutubeMin, limitRobloxMin, limitTotalMin, updatedAt }   // 各 null 可。limitTotalMin=合計の上限（v1.5〜）
 //   DayUsage { youtubeSec, robloxSec, updatedAt, hoursYoutube|null, hoursRoblox|null }
 //   now { app: 'youtube'|'roblox'|'none', at }    agent { version, host, lastRunAt }
+//   PowerData { now: {w, at, cumKwh}|null, meter: {cumKwh, at}|null, days: Map<'yyyy-MM-dd', PowerDay>, settings: PowerSettings|null }
+//   PowerDay { hours: number[24](kWh), total, updatedAt|null }    PowerSettings { warnW, yenPerKwh, updatedAt }   // 各 null 可
 
 import { sortUsers } from './logic.js';
 
@@ -51,20 +53,31 @@ export function hasHourly(day) {
   return day.hoursYoutube !== null || day.hoursRoblox !== null;
 }
 
+/** 空の電力データ（楽観更新の電力設定を重ねる土台用）。 */
+export function emptyPower() {
+  return { now: null, meter: null, days: new Map(), settings: null };
+}
+
+/** 表示できる電力データが何もない（now も days も無い）か。power が null でも true。 */
+export function isPowerEmpty(power) {
+  return !power || (power.now === null && power.days.size === 0);
+}
+
 /** 文字列 → ScreenTimeData。解釈できないJSONは空データ。 */
 export function parse(raw) {
-  if (raw === null || raw === undefined || String(raw).trim() === '') return { users: [] };
+  if (raw === null || raw === undefined || String(raw).trim() === '') return { users: [], power: null };
   let root;
   try {
     root = JSON.parse(raw);
   } catch {
-    return { users: [] };
+    return { users: [], power: null };
   }
   return parseRoot(root);
 }
 
 export function parseRoot(root) {
-  if (!isObj(root)) return { users: [] };
+  if (!isObj(root)) return { users: [], power: null };
+  const power = parsePower(root.power);
   const usersEl = root.users;
   const users = [];
   if (isObj(usersEl)) {
@@ -79,7 +92,7 @@ export function parseRoot(root) {
       if (u) users.push(u);
     });
   }
-  return { users: sortUsers(users) };
+  return { users: sortUsers(users), power };
 }
 
 function parseUser(uid, el) {
@@ -114,6 +127,7 @@ function parseSettings(el) {
   return {
     limitYoutubeMin: roundOrNull(el.limitYoutubeMin),
     limitRobloxMin: roundOrNull(el.limitRobloxMin),
+    limitTotalMin: roundOrNull(el.limitTotalMin),
     updatedAt: roundOrNull(el.updatedAt),
   };
 }
@@ -177,4 +191,83 @@ function parseAgent(el) {
     host: str(el.host),
     lastRunAt: roundOrNull(el.lastRunAt),
   };
+}
+
+// ---------------- 電力（`/screentime/power`） ----------------
+
+/** `/screentime/power.json` 相当の本文 → PowerData。`null`・不正JSON・オブジェクト以外は null。 */
+export function parsePowerJson(raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === '') return null;
+  try {
+    return parsePower(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+/** `power` ノード。オブジェクト以外は null。未知のキーは無視。 */
+export function parsePower(el) {
+  if (!isObj(el)) return null;
+  return {
+    now: parsePowerNow(el.now),
+    meter: parsePowerMeter(el.meter),
+    days: parsePowerDays(el.days),
+    settings: parsePowerSettings(el.settings),
+  };
+}
+
+function parsePowerNow(el) {
+  if (!isObj(el)) return null;
+  const w = num(el.w);
+  if (w === null) return null;
+  return { w: round(w), at: roundOrNull(el.at), cumKwh: num(el.cumKwh) };
+}
+
+function parsePowerMeter(el) {
+  if (!isObj(el)) return null;
+  const cum = num(el.cumKwh);
+  const at = roundOrNull(el.at);
+  if (cum === null || at === null) return null;
+  return { cumKwh: cum, at };
+}
+
+function parsePowerSettings(el) {
+  if (!isObj(el)) return null;
+  return {
+    warnW: roundOrNull(el.warnW),
+    yenPerKwh: roundOrNull(el.yenPerKwh),
+    updatedAt: roundOrNull(el.updatedAt),
+  };
+}
+
+function parsePowerDays(el) {
+  const out = new Map();
+  if (!isObj(el)) return out;
+  for (const [key, d] of Object.entries(el)) {
+    if (!isObj(d)) continue;
+    const hours = parseKwhHours(d.hours);
+    const total = num(d.total) ?? hours.reduce((a, b) => a + b, 0);
+    out.set(key, { hours, total: Math.max(total, 0), updatedAt: roundOrNull(d.updatedAt) });
+  }
+  return out;
+}
+
+/**
+ * 時間別kWh → 常に24要素。RTDBは配列でもオブジェクト("0".."23"キー、欠損=0)でも返す。
+ * 配列/オブジェクト以外は全て0。要素は number/数値文字列可、null/非数/負は0。範囲外のキー・24超は無視。
+ */
+function parseKwhHours(el) {
+  const out = new Array(24).fill(0);
+  const kwh = (e) => Math.max(num(e) ?? 0, 0);
+  if (Array.isArray(el)) {
+    el.forEach((e, i) => { if (i < 24) out[i] = kwh(e); });
+  } else if (isObj(el)) {
+    for (const k of Object.keys(el)) {
+      const t = k.trim();
+      if (!/^[+-]?\d+$/.test(t)) continue;
+      const i = parseInt(t, 10);
+      if (i >= 0 && i <= 23) out[i] = kwh(el[k]);
+    }
+  }
+  return out;
 }
