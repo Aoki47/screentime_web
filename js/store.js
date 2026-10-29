@@ -1,5 +1,5 @@
 // アプリの状態管理（Android版 MainViewModel + ScreenTimeRepository + ThemeRepository の移植）。
-// DOMには触れない。fetch / localStorage / 時計 / タイマーは注入できるので Node でテストできる。
+// DOMには触れない。fetch / localStorage / 時計 / タイマー / ID トークン取得は注入できるので Node でテストできる。
 
 import { FETCH_TIMEOUT_MS, POLL_INTERVAL_MS, requestUrl, settingsUrl } from './config.js';
 import {
@@ -20,6 +20,15 @@ import { findThemeOrDefault } from './themes.js';
 export const KEY_RAW_JSON = 'screentime_raw_json';
 export const KEY_THEME_ID = 'theme_id';
 
+/** state.status の値。通常は 'ok'、RTDB が 401/403 を返したら 'auth-error'（このアカウントは許可されていない）。 */
+export const STATUS_OK = 'ok';
+export const STATUS_AUTH_ERROR = 'auth-error';
+
+/** HTTP ステータスが認証・認可エラー（トークン無効 / ルールで拒否）か。 */
+export function isAuthStatus(status) {
+  return status === 401 || status === 403;
+}
+
 /** 表示対象のユーザー（selectedUid → 無ければ先頭）。楽観更新した設定を重ねた実効データ。 */
 export function currentUser(state) {
   const users = state.data?.users ?? [];
@@ -38,6 +47,9 @@ export function safeStorage(raw) {
     set(key, value) {
       try { raw?.setItem(key, value); } catch { /* 無視 */ }
     },
+    remove(key) {
+      try { raw?.removeItem(key); } catch { /* 無視 */ }
+    },
   };
 }
 
@@ -48,11 +60,13 @@ export class Store {
    * @param {{get(k:string):string|null,set(k:string,v:string):void}} deps.storage
    * @param {()=>number} [deps.nowMs]
    * @param {{setTimeout:Function,clearTimeout:Function}} [deps.timers]
+   * @param {()=>Promise<string|null>} [deps.getToken] Firebase ID トークンの取得（未ログイン/不要なら null → `?auth` を付けない）
    */
-  constructor({ fetchImpl, storage, nowMs = () => Date.now(), timers = { setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a) } }) {
+  constructor({ fetchImpl, storage, nowMs = () => Date.now(), getToken = async () => null, timers = { setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a) } }) {
     this.fetchImpl = fetchImpl;
     this.storage = storage;
     this.nowMs = nowMs;
+    this.getToken = getToken;
     this.timers = timers;
     this.listeners = new Set();
 
@@ -61,6 +75,8 @@ export class Store {
       nowMs: now,
       data: null,          // null=まだ何も取得できていない
       loaded: false,       // 初回の取得試行が完了したか
+      status: STATUS_OK,   // ok | auth-error（RTDB が 401/403。許可されていないアカウント）
+      auth: { ready: false, email: null, error: null }, // Google ログイン状態（main.js が反映）。ready=状態確定済み
       online: true,        // 直近の通信が成功したか。falseならキャッシュ表示で「オフライン」
       isRefreshing: false,
       selection: Selection.initial(localIsoDate(now)),
@@ -97,6 +113,39 @@ export class Store {
   start() {
     this.startClock();
     this.resume();
+  }
+
+  /** ログイン状態を反映する。user は { email } かログアウト中の null。 */
+  setAuthUser(user) {
+    this.set({ auth: { ready: true, email: user?.email ?? null, error: this.state.auth.error } });
+  }
+
+  /** ログイン処理のエラー（表示用の文言）。null で消す。 */
+  setAuthError(message) {
+    this.set({ auth: { ...this.state.auth, error: message ?? null } });
+  }
+
+  /** ログアウト時: 通信とタイマーを止め、取得済みデータとキャッシュを破棄する（別アカウントに見せない）。 */
+  reset() {
+    this.stop();
+    this.storage.remove?.(KEY_RAW_JSON);
+    this.set({
+      data: null,
+      loaded: false,
+      online: true,
+      status: STATUS_OK,
+      showSettings: false,
+      limitDraft: null,
+      saveStatus: 'idle',
+      pendingSettings: {},
+    });
+  }
+
+  /** 時計とポーリングを止める。 */
+  stop() {
+    this.pause();
+    if (this.clockTimer !== null) this.timers.clearTimeout(this.clockTimer);
+    this.clockTimer = null;
   }
 
   /** 前面に戻った（visibilitychange→visible / pageshow）: 即時再取得＋ポーリング再開 */
@@ -261,26 +310,44 @@ export class Store {
     }
   }
 
-  /** RTDB取得。失敗時は最終成功データ（生JSON）にフォールバック。 */
+  /** ID トークンを取得する。失敗は null（= `?auth` なしで試す。拒否されれば 401/403 として扱われる）。 */
+  async token() {
+    try {
+      return (await this.getToken()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * RTDB取得。失敗時は最終成功データ（生JSON）にフォールバック。
+   * HTTP 401/403 は authError=true（通信不良ではなく「許可されていない」）。
+   */
   async fetchData() {
     try {
+      const token = await this.token();
       const body = await this.withTimeout(async (signal) => {
-        const res = await this.fetchImpl(requestUrl(), { method: 'GET', cache: 'no-store', signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await this.fetchImpl(requestUrl(token), { method: 'GET', cache: 'no-store', signal });
+        if (!res.ok) {
+          const err = new Error(`HTTP ${res.status}`);
+          err.status = res.status;
+          throw err;
+        }
         return res.text();
       });
       this.storage.set(KEY_RAW_JSON, body);
-      return { data: parse(body), online: true };
-    } catch {
+      return { data: parse(body), online: true, authError: false };
+    } catch (e) {
+      const authError = isAuthStatus(e?.status);
       const cached = this.storage.get(KEY_RAW_JSON);
-      return { data: cached !== null ? parse(cached) : null, online: false };
+      return { data: cached !== null ? parse(cached) : null, online: false, authError };
     }
   }
 
   /** 上限設定を `PATCH /screentime/users/{uid}/settings.json` で書き込む。成功(2xx)なら true。 */
   async saveSettings(uid, youtubeMin, robloxMin, updatedAtSec) {
     try {
-      const url = settingsUrl(uid);
+      const url = settingsUrl(uid, await this.token());
       if (!url) return false;
       return await this.withTimeout(async (signal) => {
         const res = await this.fetchImpl(url, {
@@ -289,6 +356,7 @@ export class Store {
           body: patchBody(youtubeMin, robloxMin, updatedAtSec),
           signal,
         });
+        if (isAuthStatus(res.status)) this.set({ status: STATUS_AUTH_ERROR });
         return res.ok;
       });
     } catch {
@@ -321,6 +389,7 @@ export class Store {
         // 失敗かつキャッシュ無しの場合でも、以前の表示データがあれば維持する
         data: result.data ?? s.data,
         loaded: true,
+        status: result.authError ? STATUS_AUTH_ERROR : STATUS_OK,
         online: result.online,
         pendingSettings: result.online ? this.reconcilePending(s.pendingSettings, result.data) : s.pendingSettings,
       });

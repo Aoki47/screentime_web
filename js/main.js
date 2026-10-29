@@ -3,7 +3,7 @@
 import { hourlyChartSvg, weekChartSvg } from './charts.js';
 import { Store, safeStorage } from './store.js';
 import { findThemeOrDefault, themeBgColor } from './themes.js';
-import { cardScale, isWide, overlayScale, pageScale, renderMain, renderOverlay } from './ui.js';
+import { cardScale, isWide, loginErrorText, overlayScale, pageScale, renderGate, renderMain, renderOverlay } from './ui.js';
 
 const root = document.documentElement;
 const appEl = document.getElementById('app');
@@ -17,10 +17,33 @@ try {
   rawStorage = null; // プライベートモード等
 }
 
+// 認証モジュール（Firebase SDK を CDN から読む）。読み込めなくても画面は出し、ログイン画面でエラーを知らせる。
+let authMod = null;
+let authLoading = null;
+function loadAuth() {
+  if (authMod) return Promise.resolve(authMod);
+  if (!authLoading) {
+    authLoading = import('./auth.js').then(
+      (m) => {
+        authMod = m;
+        return m;
+      },
+      (e) => {
+        authLoading = null; // 次のタップで再試行できるように
+        throw e;
+      },
+    );
+  }
+  return authLoading;
+}
+
 const store = new Store({
   fetchImpl: (...args) => fetch(...args),
   storage: safeStorage(rawStorage),
+  getToken: async () => (authMod ? authMod.getToken() : null),
 });
+
+let signedIn = false;
 
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
 
@@ -41,6 +64,14 @@ function renderApp() {
   const vp = viewport();
   lastWide = isWide(vp.width, vp.height);
   root.style.setProperty('--hs', pageScale(vp.width, vp.height).toFixed(4));
+  // 未ログイン／許可されていないアカウントはゲート画面（ログイン・拒否メッセージ）を出す
+  const gate = renderGate(store.state);
+  if (gate) {
+    appEl.innerHTML = gate;
+    lastCharts = null;
+    fit();
+    return;
+  }
   const { html, charts } = renderMain(store.state, vp);
   appEl.innerHTML = html;
   lastCharts = charts;
@@ -151,7 +182,7 @@ function renderOverlayUi() {
 
 // ---------------- 購読 ----------------
 
-const MAIN_KEYS = ['nowMs', 'data', 'loaded', 'online', 'selection', 'selectedUid', 'themeId', 'pendingSettings'];
+const MAIN_KEYS = ['nowMs', 'data', 'loaded', 'online', 'selection', 'selectedUid', 'themeId', 'pendingSettings', 'status', 'auth'];
 
 store.subscribe((s, p) => {
   if (s.themeId !== p.themeId) applyTheme(s.themeId);
@@ -160,7 +191,8 @@ store.subscribe((s, p) => {
     s.showSettings !== p.showSettings ||
     s.limitDraft !== p.limitDraft ||
     s.saveStatus !== p.saveStatus ||
-    s.themeId !== p.themeId
+    s.themeId !== p.themeId ||
+    s.auth !== p.auth
   ) {
     renderOverlayUi();
   }
@@ -181,6 +213,14 @@ document.addEventListener('click', (e) => {
     case 'step': store.onLimitStep(d.app, d.dir === 'up'); break;
     case 'save': store.saveLimits(); break;
     case 'theme': store.selectTheme(d.id); break;
+    case 'sign-in':
+      // ポップアップ可否のため、読み込み済みならユーザー操作の同期区間内で呼ぶ
+      if (authMod) authMod.signIn();
+      else loadAuth().then((m) => m.signIn()).catch(showAuthLoadError);
+      break;
+    case 'sign-out':
+      if (authMod) authMod.signOut();
+      break;
     default: break;
   }
 });
@@ -211,13 +251,16 @@ document.addEventListener('keydown', (e) => {
 
 // iOS: ホーム画面アプリ/タブの復帰は visibilitychange、bfcache復元は pageshow(persisted)
 document.addEventListener('visibilitychange', () => {
+  if (!signedIn) return;
   if (document.visibilityState === 'visible') store.resume();
   else store.pause();
 });
 window.addEventListener('pageshow', (e) => {
-  if (e.persisted) store.resume();
+  if (e.persisted && signedIn) store.resume();
 });
-window.addEventListener('online', () => store.refresh());
+window.addEventListener('online', () => {
+  if (signedIn) store.refresh();
+});
 
 let resizeRaf = 0;
 function onResize() {
@@ -238,7 +281,30 @@ window.addEventListener('orientationchange', onResize);
 
 // ---------------- 起動 ----------------
 
+function showAuthLoadError() {
+  store.setAuthUser(null);
+  store.setAuthError('ログイン機能を読み込めませんでした（ネットワークを確認して、もう一度お試しください）');
+}
+
+/** ログイン状態の変化: ログイン→取得とポーリング開始 / ログアウト→停止してデータとキャッシュを破棄 */
+function onAuthUser(user) {
+  const was = signedIn;
+  signedIn = !!user;
+  store.setAuthUser(user ? { email: user.email || user.displayName || 'アカウント' } : null);
+  if (signedIn && !was) {
+    store.setAuthError(null);
+    store.start();
+    if (document.hidden) store.pause();
+  } else if (!signedIn && was) {
+    store.reset();
+  }
+}
+
 applyTheme(store.state.themeId);
-renderApp();
-store.start();
-if (document.hidden) store.pause();
+renderApp(); // 認証状態が確定するまでは「読み込み中…」
+loadAuth()
+  .then((m) => {
+    m.onAuthError((e) => store.setAuthError(e ? loginErrorText(e.code) : null));
+    m.onUser(onAuthUser);
+  })
+  .catch(showAuthLoadError);

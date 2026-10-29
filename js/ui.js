@@ -180,6 +180,55 @@ function centerMessageHtml(title, sub) {
   return `<div class="center-msg"><div class="center-title">${esc(title)}</div>${sub ? `<div class="center-sub">${esc(sub)}</div>` : ''}</div>`;
 }
 
+// ---------------- ログイン／認証ゲート ----------------
+
+/** Firebase Auth のエラーコード → 表示文言（コードが不明なら汎用文＋コード）。 */
+export function loginErrorText(code) {
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return 'このサイトのドメインが Firebase の承認済みドメインに登録されていません';
+    case 'auth/network-request-failed':
+      return '通信できませんでした。ネットワークを確認してください';
+    case 'auth/user-disabled':
+      return 'このアカウントは無効になっています';
+    case 'auth/web-storage-unsupported':
+      return 'このブラウザではログイン情報を保存できません（プライベートブラウズや Cookie 設定を確認）';
+    default:
+      return code ? `ログインできませんでした（${code}）` : 'ログインできませんでした';
+  }
+}
+
+function gateHtml(inner) {
+  return `<div class="page"><main class="main"><div class="gate">${inner}</div></main></div>`;
+}
+
+/**
+ * ログインが済んでいない／許可されていないときの画面。メイン画面を出してよいときは null。
+ *  - 状態確定前: 読み込み中
+ *  - ログアウト中: アプリ名＋「Google でログイン」
+ *  - RTDB が 401/403: 「このアカウント（email）は許可されていません」＋ログアウト
+ */
+export function renderGate(state) {
+  const auth = state.auth;
+  if (!auth) return null; // 認証を使わない構成（テスト等）
+  if (!auth.ready) return gateHtml('<div class="gate-title">読み込み中…</div>');
+  if (!auth.email) {
+    const err = auth.error ? `<p class="gate-error" role="alert">${esc(auth.error)}</p>` : '';
+    return gateHtml(`
+      <h1 class="gate-title">使用時間</h1>
+      <p class="gate-sub">Mac の YouTube / Roblox の使用時間</p>
+      <button type="button" class="gate-btn" data-action="sign-in">Google でログイン</button>
+      ${err}`);
+  }
+  if (state.status === 'auth-error') {
+    return gateHtml(`
+      <div class="gate-title">このアカウント（${esc(auth.email)}）は許可されていません</div>
+      <p class="gate-sub">許可されたアカウントでログインし直してください</p>
+      <button type="button" class="gate-btn" data-action="sign-out">ログアウト</button>`);
+  }
+  return null;
+}
+
 // ---------------- メイン画面 ----------------
 
 /**
@@ -303,14 +352,25 @@ function themeListHtml(selectedId) {
   }).join('')}</div>`;
 }
 
+function accountSectionHtml(auth) {
+  if (!auth?.email) return '';
+  return `
+    <h3 class="sec-title">アカウント</h3>
+    <div class="account-box">
+      <div class="account-email">${esc(auth.email)}</div>
+      <button type="button" class="logout-btn" data-action="sign-out">ログアウト</button>
+    </div>`;
+}
+
 /** 設定オーバーレイ（スクリム＋パネル）。 */
 export function renderOverlay(state, vp) {
   const wide = isWide(vp.width, vp.height);
   const limits = limitsSectionHtml(state.limitDraft, state.saveStatus);
   const themes = `<h3 class="sec-title">テーマ</h3>${themeListHtml(state.themeId)}`;
+  const account = accountSectionHtml(state.auth);
   const content = wide
-    ? `<div class="ov-cols"><div class="ov-col" data-scroll="limits">${limits}</div><div class="ov-col" data-scroll="themes">${themes}</div></div>`
-    : `<div class="ov-scroll" data-scroll="all">${limits}<div class="ov-gap"></div>${themes}</div>`;
+    ? `<div class="ov-cols"><div class="ov-col" data-scroll="limits">${limits}</div><div class="ov-col" data-scroll="themes">${themes}${account ? `<div class="ov-gap"></div>${account}` : ''}</div></div>`
+    : `<div class="ov-scroll" data-scroll="all">${limits}<div class="ov-gap"></div>${themes}${account ? `<div class="ov-gap"></div>${account}` : ''}</div>`;
   return `
     <div class="ov-scrim${wide ? ' is-wide' : ''}" data-action="scrim">
       <div class="ov-panel" role="dialog" aria-modal="true" aria-label="設定" tabindex="-1">
